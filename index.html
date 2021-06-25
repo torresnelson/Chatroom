@@ -1,0 +1,122 @@
+<!DOCTYPE>
+<html>
+<head>
+<title>chat project beta</title>
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+</head>
+<!------ Include the above in your HEAD tag ---------->
+<script>
+	// add all helper functions here
+	function Clear() {
+		$('.sendMsgBox input').each(function() {
+    		$('#inp').val("");
+  		});
+  		$('.sendMsgBox input').first().focus();
+	}
+	function getName() {
+		return prompt('Please enter your name.');
+	}
+	function sendMsg() {
+		const text = $('#inp').val();
+		socket.emit('chat', { name, text });
+	}
+	function handleJoinUser(name) {
+		$('#user').append(`
+		  <li>User joined: ${name}</li>
+		`);
+	}
+	function handleLeaveUser(name) {
+		$('#user').append(`
+		<li>User left: ${name}</li>
+		`);
+	}
+	function handleChat(data) {
+		$('#messages').append(`
+		<li>${data.name} --> ${data.text}</li>
+		`);
+	}
+
+	let typingUsers = new Set()
+	function handleStartType(name) {
+		typingUsers.add(name);
+		let displayString = '';
+		for (const user of Array.from(typingUsers)) {
+			displayString += `${user}, `;
+		}
+		displayString = displayString.substr(0, displayString.length - 2) // to remove trailing comma
+		displayString += ' typing...'
+		$('#indicator').text(displayString);
+	}
+	function handleStopType(name) {
+		typingUsers.delete(name)
+		let displayString = ''
+		for (const user of Array.from(typingUsers)) {
+			displayString += `${user}, `;
+		}
+		displayString = displayString.substr(0, displayString.length - 2)
+		displayString += displayString.length > 0 ? ' typing...' : '' // when string is empty, don’t add anything
+		$('#indicator').text(displayString)
+	}
+
+	// to handle disconnecting users to stop typing
+	function handleLeaveUser(name) {
+		handleStopType(name);
+		$('#user').append(`
+			<li>User left: ${name}</li>
+		`);
+	}
+</script>
+<script>
+	$(document).ready(function() {
+		socket = io();//inicia cosas en el server
+		// register all event handlers here
+		socket.on('connect', () => {
+			name = getName();
+			socket.emit('join', name);
+		});
+		socket.on('join', handleJoinUser); //unirse al chat
+		socket.on('leave', handleLeaveUser); //dejar el char
+		socket.on('chat', handleChat); //Chat usuario y mensaje
+		socket.on('start-type', handleStartType);
+		socket.on('stop-type', handleStopType);
+		//Aca se muestra quien esta escribiendo es este momento
+		$('#inp').on('input', emitStartType);
+		$('#inp').on('blur', emitStopType);
+		$("#inp").keyup(function(event) {
+			if (event.keyCode === 13) {
+				$("#inpButton").click();
+			}
+		});
+		
+		let typingTimeout = null;
+		let isStartTypeSent = false;
+
+		function emitStartType() {
+			clearTimeout(typingTimeout);
+			typingTimeout = setTimeout(emitStopType, 1000);
+			if (isStartTypeSent) return;
+			socket.emit('start-type', name, () => {
+				isStartTypeSent = true;
+			});
+		}
+
+		function emitStopType() {
+			socket.emit('stop-type', name, () => {
+				isStartTypeSent = false;
+			});
+		}
+	});
+</script>
+<body>
+	<h1>CHAT</h1>
+	<div align="center"><!-- chat alineado a la izquierda -->
+		<ul id='messages'></ul><!-- Lista de mensajes, este es el chat en si -->
+	</div>
+	<div class='sendMsgBox' align="center">
+		<input type='text' class="textinchat" id='inp' placeholder="Type your message"  /> <!--este es el cuadro donde se escriben los mensajes para ser enviados al chat -->
+		<button type="button" class="loginButton" id="inpButton" value="clear" onclick="sendMsg();Clear()" >Send</button><!-- se le agrega la id a button para poder relacionarlo con la funcion que reacciona al precionar enter en el keyboard -->
+		<p id="indicator">.</p><!-- indicador de que alguien escribe -->
+	</div>	
+</body>
+</html>
